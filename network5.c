@@ -1,5 +1,5 @@
 /*Shuzhan Yang
-2026/3/11*/
+2026/4/3*/
 #include <string.h>
 #include <stdio.h>
 #include <sys/socket.h>
@@ -16,17 +16,17 @@
 struct FileInfo {
     char filename[100];
     char fullFileHash[65];
-    int numberOfChunks;  // <-- 新增：用来存储分块数量
+    int numberOfChunks;  // <-- ADDED: Used to store the number of chunks
     char clientIP[MAXPEERS][INET_ADDRSTRLEN];
     int clientPort[MAXPEERS];
     int numberOfPeers;
     struct FileInfo *next;
 };
 
-// 全局链表头指针
+// Global linked list head pointer
 struct FileInfo *head = NULL;
 
-// 1. 查找文件节点 (保持不变)
+// 1. Find file node (remains unchanged)
 struct FileInfo* find_file(const char* hash) {
     struct FileInfo* current = head;
     while (current != NULL) {
@@ -38,18 +38,18 @@ struct FileInfo* find_file(const char* hash) {
     return NULL;
 }
 
-// 2. 注册或更新文件信息 (新增了 chunks 参数)
+// 2. Register or update file information (added chunks parameter)
 void register_file(const char* filename, const char* hash, int chunks, const char* ip, int port) {
     struct FileInfo* existing_file = find_file(hash);
 
     if (existing_file != NULL) {
-        // 去重检查
+        // Check for duplicates
         for (int i = 0; i < existing_file->numberOfPeers; i++) {
             if (strcmp(existing_file->clientIP[i], ip) == 0 && existing_file->clientPort[i] == port) {
-                return; // 已经存在，忽略
+                return; // Already exists, ignore
             }
         }
-        // 追加客户端
+        // Append client
         if (existing_file->numberOfPeers < MAXPEERS) {
             int index = existing_file->numberOfPeers;
             strcpy(existing_file->clientIP[index], ip);
@@ -57,7 +57,7 @@ void register_file(const char* filename, const char* hash, int chunks, const cha
             existing_file->numberOfPeers++;
         }
     } else {
-        // 创建新节点
+        // Create a new node
         struct FileInfo* new_node = (struct FileInfo*)malloc(sizeof(struct FileInfo));
         if (new_node == NULL) return;
 
@@ -67,7 +67,7 @@ void register_file(const char* filename, const char* hash, int chunks, const cha
         strncpy(new_node->fullFileHash, hash, sizeof(new_node->fullFileHash) - 1);
         new_node->fullFileHash[sizeof(new_node->fullFileHash) - 1] = '\0';
 
-        new_node->numberOfChunks = chunks; // <-- 新增：保存分块数量
+        new_node->numberOfChunks = chunks; // <-- ADDED: Save the number of chunks
 
         strcpy(new_node->clientIP[0], ip);
         new_node->clientPort[0] = port;
@@ -78,7 +78,7 @@ void register_file(const char* filename, const char* hash, int chunks, const cha
     }
 }
 
-// 3. 打印当前所有服务器记录 (完全按照老师的模板格式)
+// 3. Print all current server records (matches the provided template format exactly)
 void print_all_files() {
     struct FileInfo* current = head;
     printf("Stored File Information:\n");
@@ -93,7 +93,7 @@ void print_all_files() {
     }
 }
 
-// 4. 解析 JSON 并传参
+// 4. Parse JSON and pass parameters
 void format_message(char *json_string, const char *client_ip, int client_port) {
     cJSON *root = cJSON_Parse(json_string); 
     if (!root) {
@@ -109,14 +109,14 @@ void format_message(char *json_string, const char *client_ip, int client_port) {
             
             cJSON *name_obj = cJSON_GetObjectItemCaseSensitive(file_item, "filename");
             cJSON *hash_obj = cJSON_GetObjectItemCaseSensitive(file_item, "fullFileHash");
-            cJSON *chunks_obj = cJSON_GetObjectItemCaseSensitive(file_item, "numberOfChunks"); // <-- 提取分块数量
+            cJSON *chunks_obj = cJSON_GetObjectItemCaseSensitive(file_item, "numberOfChunks"); // <-- Extract number of chunks
 
-            // 检查三个核心字段是否存在且类型正确
+            // Check if the three core fields exist and their types are correct
             if (cJSON_IsString(name_obj) && (name_obj->valuestring != NULL) &&
                 cJSON_IsString(hash_obj) && (hash_obj->valuestring != NULL) &&
-                cJSON_IsNumber(chunks_obj)) { // <-- 必须是数字
+                cJSON_IsNumber(chunks_obj)) { // <-- Must be a number
                 
-                // 传参增加 chunks_obj->valueint
+                // Pass parameters including chunks_obj->valueint
                 register_file(name_obj->valuestring, hash_obj->valuestring, chunks_obj->valueint, client_ip, client_port);
             } 
         }
@@ -133,6 +133,7 @@ void format_message(char *json_string, const char *client_ip, int client_port) {
 
     cJSON_Delete(root); 
 }
+
 int main(){
     int socketfd = socket(AF_INET, SOCK_DGRAM, 0);
     int reuse = 1; // 1 means on
@@ -172,19 +173,20 @@ int main(){
             perror("recvfrom");
             break;
         }
-        // ... 在 recvfrom 之后 ...
+        
+        // ... after recvfrom ...
         buf[n] = 0; 
         
-        // 从 src 提取发送方的 IP 和端口
+        // Extract the sender's IP and port from src
         char *client_ip = inet_ntoa(src.sin_addr);
         int client_port = ntohs(src.sin_port);
         
         printf("Received data from Client %s:%d\n", client_ip, client_port);
         
-        // 把 IP 和 port 传进去
+        // Pass the IP and port into the parsing function
         format_message(buf, client_ip, client_port);
         
-        // 处理完之后，打印一下当前的服务器状态
+        // After processing, print the current server status
         print_all_files();
     }
 }
